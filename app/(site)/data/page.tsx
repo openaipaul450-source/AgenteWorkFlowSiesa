@@ -284,7 +284,7 @@ export default function DataPage(): JSX.Element {
             onChange={(event) => setManualSql(event.target.value)}
             rows={5}
             className="w-full rounded border border-slate-300 px-3 py-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            placeholder="SELECT * FROM \"_catalog\" LIMIT 10;"
+            placeholder={'SELECT * FROM "_catalog" LIMIT 10;'}
           />
           <button
             type="submit"
