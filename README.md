@@ -1,60 +1,63 @@
-# ChatKit Starter Template
+# Analytics Agent ChatKit Starter
 
-This repository is the simplest way to bootstrap a [ChatKit](http://openai.github.io/chatkit-js/) application. It ships with a minimal Next.js UI, the ChatKit web component, and a ready-to-use session endpoint so you can experiment with OpenAI-hosted workflows built using [Agent Builder](https://platform.openai.com/agent-builder).
+This project extends the OpenAI ChatKit starter with a minimal analytics workflow. Upload `.zip` archives of Excel workbooks, ingest them into DuckDB, and chat with an agent that can generate read-only SQL or Vega-Lite charts. Everything runs inside Next.js (App Router) and is deployable to Vercel.
 
-## What You Get
+## Features
 
-- Next.js app with `<openai-chatkit>` web component and theming controls
-- API endpoint for creating a session at [`app/api/create-session/route.ts`](app/api/create-session/route.ts)
-- Quick examples for starter prompts, placeholder text, and greating message
+- `/api/ingest` ingests `.xlsx` sheets from a zip archive into DuckDB and maintains a `_catalog` table with column metadata and row counts.
+- `/api/sql` executes validated read-only SQL with a 50k row cap and 10s timeout.
+- `/data` dashboard to upload archives, inspect the catalog, and run manual SQL checks.
+- `/` chat interface powered by `<openai-chatkit>` that auto-runs ```sql``` blocks and renders ```vega-lite``` specs below assistant messages.
+- System prompt hint so the assistant knows how to produce SQL and Vega-Lite responses.
 
-## Getting Started
+## Prerequisites
 
-Follow every step below to run the app locally and configure it for your preferred backend.
+- Node.js 18+
+- An OpenAI API key with ChatKit access
+- A ChatKit Workflow ID created in Agent Builder
 
-### 1. Install dependencies
+## Environment Variables
+
+Create `.env.local` and provide:
+
+- `OPENAI_API_KEY` – **required**. ChatKit session creation uses this key.
+- `NEXT_PUBLIC_CHATKIT_WORKFLOW_ID` – **required**. Workflow to load in the chat UI.
+- `CHATKIT_API_BASE` – optional override for the ChatKit API base URL.
+
+## Install & Run Locally
 
 ```bash
 npm install
-```
-
-### 2. Create your environment file
-
-Copy the example file and fill in the required values:
-
-```bash
-cp .env.example .env.local
-```
-
-### 3. Configure ChatKit credentials
-
-Update `.env.local` with the variables that match your setup.
-
-- `OPENAI_API_KEY` — API key with access to ChatKit.
-- `NEXT_PUBLIC_CHATKIT_WORKFLOW_ID` — the workflow you created in the ChatKit dashboard.
-- (optional) `CHATKIT_API_BASE` - customizable base URL for the ChatKit API endpoint
-
-### 4. Run the app
-
-```bash
 npm run dev
 ```
 
-Visit `http://localhost:3000` and start chatting. Use the prompts on the start screen to verify your workflow connection, then customize the UI or prompt list in [`lib/config.ts`](lib/config.ts) and [`components/ChatKitPanel.tsx`](components/ChatKitPanel.tsx).
+Visit:
 
-### 5. Build for production (optional)
+- `http://localhost:3000/data` to upload Excel zips, refresh the catalog, or run ad-hoc queries.
+- `http://localhost:3000/` to chat with the analytics agent.
 
-```bash
-npm run build
-npm start
-```
+## Usage Notes
 
-## Customization Tips
+1. Zip ingestion is capped at ~2,000,000 total rows per upload. All columns are stored as `VARCHAR` to keep type coercion simple.
+2. DuckDB is stored at `/tmp/analytics.duckdb`. This works on Vercel but resets between deployments. **TODO:** switch to a persistent backend (e.g., Vercel Blob or external storage) for production reliability.
+3. `/api/sql` rejects DDL/DML statements and trims results at 50,000 rows. Encourage the agent (or manual users) to add `LIMIT` clauses.
+4. The chat bridge watches for ```sql``` and ```vega-lite``` fences. SQL blocks are executed against DuckDB and the results render inline; Vega-Lite specs render via `vega-embed`.
 
-- Adjust starter prompts, greeting text, and placeholder copy in [`lib/config.ts`](lib/config.ts).
-- Update the theme defaults or event handlers inside[`components/ChatKitPanel.tsx`](components/ChatKitPanel.tsx) to integrate with your product analytics or storage.
+## Deploying to Vercel
 
-## References
+1. Push this repository to GitHub and import it in the Vercel dashboard.
+2. Set the environment variables above in the project settings.
+3. Deploy – the provided `vercel.json` limits function runtime to 10 seconds, matching the SQL timeout.
 
-- [ChatKit JavaScript Library](http://openai.github.io/chatkit-js/)
-- [Advanced Self-Hosting Examples](https://github.com/openai/openai-chatkit-advanced-samples)
+## Manual QA Checklist
+
+1. `npm install` and `npm run dev`.
+2. Visit `/data`, upload a `.zip` of Excel files, and confirm tables appear in the catalog.
+3. Run a manual `SELECT * FROM "_catalog"` query and confirm results display.
+4. Visit `/`, ask the agent for a table summary (e.g., "Show the first 5 rows of orders"), observe the SQL result under the assistant message.
+5. Request a chart ("Plot sales by month") and verify the Vega-Lite visualization renders.
+
+## Additional Notes
+
+- Update the ChatKit workflow's system prompt to include the guidance from [`app/lib/agent-system-prompt.ts`](app/lib/agent-system-prompt.ts).
+- To persist data across deployments, replace the local `/tmp` DuckDB file with a remote DuckDB or object storage solution.
