@@ -6,6 +6,11 @@ interface CreateSessionRequestBody {
   workflow?: { id?: string | null } | null;
   scope?: { user_id?: string | null } | null;
   workflowId?: string | null;
+  chatkit_configuration?: {
+    file_upload?: {
+      enabled?: boolean;
+    };
+  };
 }
 
 const DEFAULT_CHATKIT_BASE = "https://api.openai.com";
@@ -21,7 +26,9 @@ export async function POST(request: Request): Promise<Response> {
     const openaiApiKey = process.env.OPENAI_API_KEY;
     if (!openaiApiKey) {
       return new Response(
-        JSON.stringify({ error: "Missing OPENAI_API_KEY environment variable" }),
+        JSON.stringify({
+          error: "Missing OPENAI_API_KEY environment variable",
+        }),
         {
           status: 500,
           headers: { "Content-Type": "application/json" },
@@ -30,7 +37,8 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const parsedBody = await safeParseJson<CreateSessionRequestBody>(request);
-    const { userId, sessionCookie: resolvedSessionCookie } = await resolveUserId(request);
+    const { userId, sessionCookie: resolvedSessionCookie } =
+      await resolveUserId(request);
     sessionCookie = resolvedSessionCookie;
     const resolvedWorkflowId =
       parsedBody?.workflow?.id ?? parsedBody?.workflowId ?? WORKFLOW_ID;
@@ -63,6 +71,12 @@ export async function POST(request: Request): Promise<Response> {
       body: JSON.stringify({
         workflow: { id: resolvedWorkflowId },
         user: userId,
+        chatkit_configuration: {
+          file_upload: {
+            enabled:
+              parsedBody?.chatkit_configuration?.file_upload?.enabled ?? false,
+          },
+        },
       }),
     });
 
@@ -86,7 +100,9 @@ export async function POST(request: Request): Promise<Response> {
       });
       return buildJsonResponse(
         {
-          error: upstreamError ?? `Failed to create session: ${upstreamResponse.statusText}`,
+          error:
+            upstreamError ??
+            `Failed to create session: ${upstreamResponse.statusText}`,
           details: upstreamJson,
         },
         upstreamResponse.status,
@@ -134,14 +150,18 @@ async function resolveUserId(request: Request): Promise<{
   userId: string;
   sessionCookie: string | null;
 }> {
-  const existing = getCookieValue(request.headers.get("cookie"), SESSION_COOKIE_NAME);
+  const existing = getCookieValue(
+    request.headers.get("cookie"),
+    SESSION_COOKIE_NAME
+  );
   if (existing) {
     return { userId: existing, sessionCookie: null };
   }
 
-  const generated = typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
+  const generated =
+    typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
 
   return {
     userId: generated,
@@ -149,7 +169,10 @@ async function resolveUserId(request: Request): Promise<{
   };
 }
 
-function getCookieValue(cookieHeader: string | null, name: string): string | null {
+function getCookieValue(
+  cookieHeader: string | null,
+  name: string
+): string | null {
   if (!cookieHeader) {
     return null;
   }
@@ -157,8 +180,12 @@ function getCookieValue(cookieHeader: string | null, name: string): string | nul
   const cookies = cookieHeader.split(";");
   for (const cookie of cookies) {
     const [rawName, ...rest] = cookie.split("=");
-    if (!rawName || rest.length === 0) { continue; }
-    if (rawName.trim() === name) { return rest.join("=").trim(); }
+    if (!rawName || rest.length === 0) {
+      continue;
+    }
+    if (rawName.trim() === name) {
+      return rest.join("=").trim();
+    }
   }
   return null;
 }
@@ -199,7 +226,9 @@ function buildJsonResponse(
 async function safeParseJson<T>(req: Request): Promise<T | null> {
   try {
     const text = await req.text();
-    if (!text) { return null; }
+    if (!text) {
+      return null;
+    }
     return JSON.parse(text) as T;
   } catch {
     return null;

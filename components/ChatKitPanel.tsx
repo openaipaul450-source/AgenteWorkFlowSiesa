@@ -8,8 +8,7 @@ import {
   GREETING,
   CREATE_SESSION_ENDPOINT,
   WORKFLOW_ID,
-  CLAUDE_SKILLS_ENDPOINT,
-  CLAUDE_SKILL_TOOL_NAMES,
+  getThemeConfig,
 } from "@/lib/config";
 import type {
   ClaudeSkillDefinition,
@@ -276,6 +275,12 @@ export function ChatKitPanel({
           },
           body: JSON.stringify({
             workflow: { id: WORKFLOW_ID },
+            chatkit_configuration: {
+              // enable attachments
+              file_upload: {
+                enabled: true,
+              },
+            },
           }),
         });
 
@@ -343,18 +348,7 @@ export function ChatKitPanel({
     api: { getClientSecret },
     theme: {
       colorScheme: theme,
-      color: {
-        grayscale: {
-          hue: 220,
-          tint: 6,
-          shade: theme === "dark" ? -1 : -4,
-        },
-        accent: {
-          primary: theme === "dark" ? "#f1f5f9" : "#0f172a",
-          level: 1,
-        },
-      },
-      radius: "round",
+      ...getThemeConfig(theme),
     },
     startScreen: {
       greeting: GREETING,
@@ -362,6 +356,10 @@ export function ChatKitPanel({
     },
     composer: {
       placeholder: PLACEHOLDER_INPUT,
+      attachments: {
+        // Enable attachments
+        enabled: true,
+      },
     },
     threadItemActions: {
       feedback: false,
@@ -492,7 +490,7 @@ export function ChatKitPanel({
   }
 
   return (
-    <div className="relative flex h-[90vh] w-full flex-col overflow-hidden bg-white shadow-sm transition-colors dark:bg-slate-900">
+    <div className="relative pb-8 flex h-[90vh] w-full rounded-2xl flex-col overflow-hidden bg-white shadow-sm transition-colors dark:bg-slate-900">
       <ChatKit
         key={widgetInstanceKey}
         control={chatkit.control}

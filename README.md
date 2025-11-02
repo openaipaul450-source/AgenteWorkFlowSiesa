@@ -1,22 +1,20 @@
 # Analytics Agent ChatKit Starter
 
-This project extends the OpenAI ChatKit starter with a minimal analytics workflow. Upload `.zip` archives of Excel workbooks, ingest them into DuckDB, and chat with an agent that can generate read-only SQL or Vega-Lite charts. Everything runs inside Next.js (App Router) and is deployable to Vercel.
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![NextJS](https://img.shields.io/badge/Built_with-NextJS-blue)
+![OpenAI API](https://img.shields.io/badge/Powered_by-OpenAI_API-orange)
+
+This repository is the simplest way to bootstrap a [ChatKit](http://openai.github.io/chatkit-js/) application. It ships with a minimal Next.js UI, the ChatKit web component, and a ready-to-use session endpoint so you can experiment with OpenAI-hosted workflows built using [Agent Builder](https://platform.openai.com/agent-builder).
 
 ## Features
 
-- `/api/ingest` ingests `.xlsx` sheets from a zip archive into DuckDB and maintains a `_catalog` table with column metadata and row counts.
-- `/api/sql` executes validated read-only SQL with a 50k row cap and 10s timeout.
-- `/data` dashboard to upload archives, inspect the catalog, and run manual SQL checks.
-- `/` chat interface powered by `<openai-chatkit>` that auto-runs ```sql``` blocks and renders ```vega-lite``` specs below assistant messages.
-- System prompt hint so the assistant knows how to produce SQL and Vega-Lite responses.
+- Next.js app with `<openai-chatkit>` web component and theming controls
+- API endpoint for creating a session at [`app/api/create-session/route.ts`](app/api/create-session/route.ts)
+- Config file for starter prompts, theme, placeholder text, and greeting message
 
 ## Prerequisites
 
-- Node.js 18+
-- An OpenAI API key with ChatKit access
-- A ChatKit Workflow ID created in Agent Builder
-
-## Environment Variables
+### 1. Install dependencies
 
 Create `.env.local` and provide:
 
@@ -31,10 +29,21 @@ npm install
 npm run dev
 ```
 
-Visit:
+You can get your workflow id from the [Agent Builder](https://platform.openai.com/agent-builder) interface, after clicking "Publish":
 
-- `http://localhost:3000/data` to upload Excel zips, refresh the catalog, or run ad-hoc queries.
-- `http://localhost:3000/` to chat with the analytics agent.
+<img src="./public/docs/workflow.jpg" width=500 />
+
+You can get your OpenAI API key from the [OpenAI API Keys](https://platform.openai.com/api-keys) page.
+
+### 3. Configure ChatKit credentials
+
+Update `.env.local` with the variables that match your setup.
+
+- `OPENAI_API_KEY` — This must be an API key created **within the same org & project as your Agent Builder**. If you already have a different `OPENAI_API_KEY` env variable set in your terminal session, that one will take precedence over the key in `.env.local` one (this is how a Next.js app works). So, **please run `unset OPENAI_API_KEY` (`set OPENAI_API_KEY=` for Windows OS) beforehand**.
+- `NEXT_PUBLIC_CHATKIT_WORKFLOW_ID` — This is the ID of the workflow you created in [Agent Builder](https://platform.openai.com/agent-builder), which starts with `wf_...`
+- (optional) `CHATKIT_API_BASE` - This is a customizable base URL for the ChatKit API endpoint
+
+> Note: if your workflow is using a model requiring organization verification, such as GPT-5, make sure you verify your organization first. Visit your [organization settings](https://platform.openai.com/settings/organization/general) and click on "Verify Organization".
 
 ## Usage Notes
 
@@ -45,17 +54,18 @@ Visit:
 
 ## Deploying to Vercel
 
-1. Push this repository to GitHub and import it in the Vercel dashboard.
-2. Set the environment variables above in the project settings.
-3. Deploy – the provided `vercel.json` limits function runtime to 10 seconds, matching the SQL timeout.
+### 5. Deploy your app
 
-## Manual QA Checklist
+```bash
+npm run build
+```
 
-1. `npm install` and `npm run dev`.
-2. Visit `/data`, upload a `.zip` of Excel files, and confirm tables appear in the catalog.
-3. Run a manual `SELECT * FROM "_catalog"` query and confirm results display.
-4. Visit `/`, ask the agent for a table summary (e.g., "Show the first 5 rows of orders"), observe the SQL result under the assistant message.
-5. Request a chart ("Plot sales by month") and verify the Vega-Lite visualization renders.
+Before deploying your app, you need to verify the domain by adding it to the [Domain allowlist](https://platform.openai.com/settings/organization/security/domain-allowlist) on your dashboard.
+
+## Customization Tips
+
+- Adjust starter prompts, greeting text, [chatkit theme](https://chatkit.studio/playground), and placeholder copy in [`lib/config.ts`](lib/config.ts).
+- Update the event handlers inside [`components/.tsx`](components/ChatKitPanel.tsx) to integrate with your product analytics or storage.
 
 ## Additional Notes
 
