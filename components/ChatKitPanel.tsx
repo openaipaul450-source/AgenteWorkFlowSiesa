@@ -8,7 +8,15 @@ import {
   GREETING,
   CREATE_SESSION_ENDPOINT,
   WORKFLOW_ID,
+  CLAUDE_SKILLS_ENDPOINT,
+  CLAUDE_SKILL_TOOL_NAMES,
 } from "@/lib/config";
+import type {
+  ClaudeSkillDefinition,
+  ClaudeSkillSummary,
+  ClaudeSkillArgumentSchema,
+  ClaudeSkillPrimitive,
+} from "@/lib/claude-skills/types";
 import { ErrorOverlay } from "./ErrorOverlay";
 import type { ColorScheme } from "@/hooks/useColorScheme";
 
@@ -32,6 +40,14 @@ type ErrorState = {
   retryable: boolean;
 };
 
+type ClaudeSkillsListResponse = {
+  skills?: ClaudeSkillSummary[];
+};
+
+type ClaudeSkillDetailResponse = {
+  skill?: ClaudeSkillDefinition;
+};
+
 const isBrowser = typeof window !== "undefined";
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -49,6 +65,10 @@ export function ChatKitPanel({
   onThemeRequest,
 }: ChatKitPanelProps) {
   const processedFacts = useRef(new Set<string>());
+  const claudeSkillsCache = useRef<{
+    summaries: ClaudeSkillSummary[] | null;
+    details: Map<string, ClaudeSkillDefinition>;
+  }>({ summaries: null, details: new Map() });
   const [errors, setErrors] = useState<ErrorState>(() => createInitialErrors());
   const [isInitializingSession, setIsInitializingSession] = useState(true);
   const isMountedRef = useRef(true);
@@ -64,6 +84,69 @@ export function ChatKitPanel({
   const setErrorState = useCallback((updates: Partial<ErrorState>) => {
     setErrors((current) => ({ ...current, ...updates }));
   }, []);
+
+  const fetchClaudeSkillSummaries = useCallback(async () => {
+    if (claudeSkillsCache.current.summaries) {
+      return claudeSkillsCache.current.summaries;
+    }
+
+    const response = await fetch(CLAUDE_SKILLS_ENDPOINT, {
+      headers: { Accept: "application/json" },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to load Claude skills (status ${response.status})`
+      );
+    }
+
+    const payload = await parseJsonResponse<ClaudeSkillsListResponse>(response);
+    const summaries = Array.isArray(payload.skills) ? payload.skills : [];
+    claudeSkillsCache.current.summaries = summaries;
+    return summaries;
+  }, []);
+
+  const fetchClaudeSkillDetail = useCallback(
+    async (slug: string) => {
+      const trimmed = slug.trim();
+      if (!trimmed) {
+        throw new Error("Missing Claude skill slug");
+      }
+
+      const cached = claudeSkillsCache.current.details.get(trimmed);
+      if (cached) {
+        return cached;
+      }
+
+      const response = await fetch(
+        `${CLAUDE_SKILLS_ENDPOINT}?slug=${encodeURIComponent(trimmed)}`,
+        {
+          headers: { Accept: "application/json" },
+        }
+      );
+
+      if (response.status === 404) {
+        return null;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to load Claude skill (status ${response.status})`
+        );
+      }
+
+      const payload = await parseJsonResponse<ClaudeSkillDetailResponse>(
+        response
+      );
+      if (!payload.skill) {
+        throw new Error("Malformed Claude skill response");
+      }
+
+      claudeSkillsCache.current.details.set(trimmed, payload.skill);
+      return payload.skill;
+    },
+    []
+  );
 
   useEffect(() => {
     return () => {
@@ -146,6 +229,8 @@ export function ChatKitPanel({
 
   const handleResetChat = useCallback(() => {
     processedFacts.current.clear();
+    claudeSkillsCache.current.summaries = null;
+    claudeSkillsCache.current.details.clear();
     if (isBrowser) {
       setScriptStatus(
         window.customElements?.get("openai-chatkit") ? "ready" : "pending"
@@ -285,6 +370,68 @@ export function ChatKitPanel({
       name: string;
       params: Record<string, unknown>;
     }) => {
+      if (invocation.name === CLAUDE_SKILL_TOOL_NAMES.list) {
+        try {
+          const skills = await fetchClaudeSkillSummaries();
+          if (isMountedRef.current) {
+            setErrorState({ integration: null, retryable: false });
+          }
+          return { success: true, skills };
+        } catch (error) {
+          const detail =
+            error instanceof Error
+              ? error.message
+              : "Unable to load Claude skills.";
+          console.error("[ChatKitPanel] list_claude_skills failed", error);
+          if (isMountedRef.current) {
+            setErrorState({ integration: detail, retryable: false });
+          }
+          return { success: false, error: detail };
+        }
+      }
+
+      if (invocation.name === CLAUDE_SKILL_TOOL_NAMES.load) {
+        const slug = String(invocation.params.slug ?? "");
+        try {
+          const skill = await fetchClaudeSkillDetail(slug);
+          if (!skill) {
+            const detail = `Claude skill \"${slug}\" was not found.`;
+            if (isMountedRef.current) {
+              setErrorState({ integration: detail, retryable: false });
+            }
+            return { success: false, error: detail };
+          }
+
+          const validation = validateClaudeSkillArguments(
+            skill,
+            invocation.params.arguments
+          );
+          if (!validation.ok) {
+            return { success: false, error: validation.error };
+          }
+
+          if (isMountedRef.current) {
+            setErrorState({ integration: null, retryable: false });
+          }
+
+          return {
+            success: true,
+            skill,
+            arguments: validation.arguments,
+          };
+        } catch (error) {
+          const detail =
+            error instanceof Error
+              ? error.message
+              : "Unable to load Claude skill.";
+          console.error("[ChatKitPanel] load_claude_skill failed", error);
+          if (isMountedRef.current) {
+            setErrorState({ integration: detail, retryable: false });
+          }
+          return { success: false, error: detail };
+        }
+      }
+
       if (invocation.name === "switch_theme") {
         const requested = invocation.params.theme;
         if (requested === "light" || requested === "dark") {
@@ -330,8 +477,9 @@ export function ChatKitPanel({
     },
   });
 
-  const activeError = errors.session ?? errors.integration;
-  const blockingError = errors.script ?? activeError;
+  const blockingError = errors.script ?? errors.session;
+  const inlineIntegrationError =
+    !blockingError && errors.integration ? errors.integration : null;
 
   if (isDev) {
     console.debug("[ChatKitPanel] render state", {
@@ -364,6 +512,11 @@ export function ChatKitPanel({
         onRetry={blockingError && errors.retryable ? handleResetChat : null}
         retryLabel="Restart chat"
       />
+      {inlineIntegrationError ? (
+        <div className="pointer-events-none absolute left-1/2 top-4 z-10 w-[min(90%,28rem)] -translate-x-1/2 rounded-lg border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm font-medium text-amber-900 shadow-sm dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100" role="status" aria-live="polite">
+          <div className="pointer-events-auto">{inlineIntegrationError}</div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -415,4 +568,173 @@ function extractErrorDetail(
   }
 
   return fallback;
+}
+
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  const raw = await response.text();
+  if (!raw) {
+    return {} as T;
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch (error) {
+    throw new Error("Failed to parse Claude skills response");
+  }
+}
+
+type SkillArgumentValidationResult =
+  | { ok: true; arguments: Record<string, ClaudeSkillPrimitive> }
+  | { ok: false; error: string };
+
+function validateClaudeSkillArguments(
+  skill: ClaudeSkillDefinition,
+  raw: unknown
+): SkillArgumentValidationResult {
+  const schemas = skill.arguments;
+  const providedObject =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : null;
+
+  if (!schemas || Object.keys(schemas).length === 0) {
+    if (providedObject && Object.keys(providedObject).length > 0) {
+      return { ok: false, error: "This skill does not accept arguments." };
+    }
+    return { ok: true, arguments: {} };
+  }
+
+  const provided = providedObject ?? {};
+
+  const resolved: Record<string, ClaudeSkillPrimitive> = {};
+
+  for (const [name, schema] of Object.entries(schemas)) {
+    const hasExplicitValue = Object.prototype.hasOwnProperty.call(
+      provided,
+      name
+    );
+    let value = hasExplicitValue ? provided[name] : schema.default;
+
+    if (value === undefined || value === null) {
+      if (schema.required) {
+        return { ok: false, error: `Missing required argument \"${name}\".` };
+      }
+      continue;
+    }
+
+    const normalized = coerceClaudeSkillValue(schema, value);
+    if (normalized === undefined) {
+      return {
+        ok: false,
+        error: `Argument \"${name}\" must be a ${schema.type}.`,
+      };
+    }
+
+    if (schema.enum && !schema.enum.includes(normalized)) {
+      return {
+        ok: false,
+        error: `Argument \"${name}\" must be one of: ${schema.enum
+          .map(String)
+          .join(", ")}.`,
+      };
+    }
+
+    if (schema.type === "number" && typeof normalized === "number") {
+      if (typeof schema.minimum === "number" && normalized < schema.minimum) {
+        return {
+          ok: false,
+          error: `Argument \"${name}\" must be greater than or equal to ${schema.minimum}.`,
+        };
+      }
+      if (typeof schema.maximum === "number" && normalized > schema.maximum) {
+        return {
+          ok: false,
+          error: `Argument \"${name}\" must be less than or equal to ${schema.maximum}.`,
+        };
+      }
+    }
+
+    if (schema.type === "string" && typeof normalized === "string") {
+      if (schema.pattern) {
+        const regex = new RegExp(schema.pattern);
+        if (!regex.test(normalized)) {
+          return {
+            ok: false,
+            error: `Argument \"${name}\" must match pattern ${schema.pattern}.`,
+          };
+        }
+      }
+      if (schema.required && normalized.trim() === "") {
+        return {
+          ok: false,
+          error: `Argument \"${name}\" cannot be empty.`,
+        };
+      }
+    }
+
+    resolved[name] = normalized;
+  }
+
+  for (const key of Object.keys(provided)) {
+    if (!schemas[key]) {
+      console.warn(
+        `[ChatKitPanel] Ignoring unknown Claude skill argument: ${key}`
+      );
+    }
+  }
+
+  return { ok: true, arguments: resolved };
+}
+
+function coerceClaudeSkillValue(
+  schema: ClaudeSkillArgumentSchema,
+  value: unknown
+): ClaudeSkillPrimitive | undefined {
+  if (schema.type === "string") {
+    if (typeof value === "string") {
+      return value;
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      return String(value);
+    }
+    return undefined;
+  }
+
+  if (schema.type === "number") {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    }
+    return undefined;
+  }
+
+  if (schema.type === "boolean") {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (["true", "1", "yes", "y"].includes(normalized)) {
+        return true;
+      }
+      if (["false", "0", "no", "n"].includes(normalized)) {
+        return false;
+      }
+      return undefined;
+    }
+    if (typeof value === "number") {
+      if (value === 1) {
+        return true;
+      }
+      if (value === 0) {
+        return false;
+      }
+      return undefined;
+    }
+    return undefined;
+  }
+
+  return undefined;
 }

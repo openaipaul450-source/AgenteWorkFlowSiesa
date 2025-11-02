@@ -1,0 +1,18 @@
+{
+  "slug": "column-profile",
+  "title": "Column profile",
+  "description": "Inspect a specific DuckDB table and summarize the columns recorded in the _catalog metadata.",
+  "instructions": "Query the \"_catalog\" table filtered by the provided \"table\" argument. Present a Markdown table with the column name, inferred data type when available, and the sample_data column. Mention when sample data is unavailable. Close with a concise paragraph summarizing the table shape and noteworthy columns.",
+  "arguments": {
+    "table": {
+      "type": "string",
+      "description": "Exact table name to inspect in the catalog.",
+      "required": true,
+      "pattern": "^[A-Za-z0-9_]+$"
+    }
+  },
+  "metadata": {
+    "category": "catalog",
+    "labels": ["columns", "profile"]
+  }
+}

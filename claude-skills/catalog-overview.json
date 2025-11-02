@@ -1,0 +1,19 @@
+{
+  "slug": "catalog-overview",
+  "title": "Catalog overview",
+  "description": "Summarize the uploaded dataset using the analytics _catalog metadata table.",
+  "instructions": "Use SQL to read from the \"_catalog\" table ordered by rows in descending order. Respect the optional \"limit\" argument (default 5). Produce a Markdown bullet list for each table including the table name, total row count with thousands separators, and the first three columns recorded in the catalog. Note when a table contains additional columns beyond those listed.",
+  "arguments": {
+    "limit": {
+      "type": "number",
+      "description": "Maximum number of tables to include in the overview.",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 25
+    }
+  },
+  "metadata": {
+    "category": "catalog",
+    "labels": ["overview", "metadata"]
+  }
+}
