@@ -13,9 +13,9 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [
   },
 ];
 
-export const PLACEHOLDER_INPUT = "Ask anything...";
+export const PLACEHOLDER_INPUT = "schlaue Rechtsfrage...";
 
-export const GREETING = "How can I help you today?";
+export const GREETING = "Wie kann ich Ihnen helfen, liebe RuP-Mitarbeitenden?";
 
 export const getThemeConfig = (_theme: ColorScheme): ThemeOption => ({
   color: {
