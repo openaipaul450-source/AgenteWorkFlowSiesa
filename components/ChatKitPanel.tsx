@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatKit, useChatKit } from "@openai/chatkit-react";
 import {
   STARTER_PROMPTS,
@@ -12,10 +12,7 @@ import {
 } from "@/lib/config";
 import { ErrorOverlay } from "./ErrorOverlay";
 import PromptSidebar from "./PromptSidebar";
-import TokenUsagePanel, {
-  type AggregatedModelUsage,
-  type TokenUsageSummary,
-} from "./TokenUsagePanel";
+import type { AggregatedModelUsage } from "./TokenUsagePanel";
 import type { ColorScheme } from "@/hooks/useColorScheme";
 
 export type FactAction = {
@@ -52,7 +49,7 @@ type WidgetAction = {
   payload?: Record<string, unknown>;
 };
 
-type SidebarMode = "none" | "prompts" | "tokens";
+type SidebarMode = "none" | "prompts";
 
 type ChatKitLogEvent = {
   name?: string;
@@ -101,9 +98,7 @@ export function ChatKitPanel({
     [THREADLESS_ID]: {},
   });
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>("prompts");
-  const [usageByModel, setUsageByModel] = useState<Record<string, AggregatedModelUsage>>(
-    {}
-  );
+  const [, setUsageByModel] = useState<Record<string, AggregatedModelUsage>>({});
 
   const setErrorState = useCallback((updates: Partial<ErrorState>) => {
     setErrors((current) => ({ ...current, ...updates }));
@@ -466,14 +461,6 @@ export function ChatKitPanel({
     [focusComposer, onInsertPrompt, setComposerValue]
   );
 
-  const usageSummary = useMemo<TokenUsageSummary>(() => {
-    const models = Object.values(usageByModel).sort(
-      (a, b) => b.totalTokens - a.totalTokens
-    );
-    const totalTokens = models.reduce((sum, entry) => sum + entry.totalTokens, 0);
-    return { models, totalTokens };
-  }, [usageByModel]);
-
   const activeError = errors.session ?? errors.integration;
   const blockingError = errors.script ?? activeError;
 
@@ -520,47 +507,13 @@ export function ChatKitPanel({
               />
             </svg>
           </button>
-          {/* Token-Usage Toggle */}
-          <button
-            type="button"
-            onClick={() =>
-              setSidebarMode(
-                sidebarMode === "tokens" ? "none" : "tokens"
-              )
-            }
-            className={`w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 transition-colors 
-              ${sidebarMode === "tokens"
-                ? "ring-2 ring-[#bb0a30] bg-gray-200"
-                : "hover:bg-gray-200"}
-            `}
-            aria-label="Token-Nutzung"
-          >
-            <svg
-              className={`w-5 h-5 ${sidebarMode === "tokens" ? "text-[#bb0a30]" : "text-[#bb0a30]/80"}`}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              viewBox="0 0 24 24"
-            >
-              <path
-                d="M21 12A9 9 0 1 1 12 3v9z"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
         </div>
         {sidebarMode === "prompts" && (
           <div className="flex-1 overflow-hidden rounded-2xl bg-white shadow">
             <PromptSidebar onInsert={handleInsertPrompt} className="h-full" />
           </div>
         )}
-        {sidebarMode === "tokens" && (
-          <div className="flex-1 overflow-hidden rounded-2xl bg-white shadow">
-            <TokenUsagePanel summary={usageSummary} />
-          </div>
-        )}
-        {sidebarMode !== "prompts" && sidebarMode !== "tokens" && (
+        {sidebarMode !== "prompts" && (
           <div className="flex-1 flex items-center justify-center text-gray-300 text-sm bg-transparent">
           </div>
         )}
