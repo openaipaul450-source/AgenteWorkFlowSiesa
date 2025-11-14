@@ -19,9 +19,9 @@ export const STARTER_PROMPTS: StartScreenPrompt[] = [
   },
 ];
 
-export const PLACEHOLDER_INPUT = "schlaue Rechtsfrage...";
+export const PLACEHOLDER_INPUT = "Schlaue Rechtsfrage...";
 
-export const GREETING = "Wie kann ich Ihnen helfen, liebe RuP-Mitarbeitenden?";
+export const GREETING = "Wie kann ich Ihnen helfen, liebe RuP-Mitarbeitende?";
 
 const lightGrayscale: GrayscaleOptions = { hue: 0, tint: 8, shade: -4 };
 const darkGrayscale: GrayscaleOptions = { hue: 0, tint: 4, shade: -2 };
